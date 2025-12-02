@@ -1,0 +1,6 @@
+*/target
+*/Cargo.lock
+disk.img
+bootloader/bootloader.efi
+kernel/kernel
+.idea
