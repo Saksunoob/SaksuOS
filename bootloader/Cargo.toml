@@ -5,4 +5,8 @@ edition = "2024"
 
 [dependencies]
 uefi-raw = "0.13.0"
-macros = { path="../macros" }
+x86_64 = { version="0.15.4", optional = true }
+macros = { path="../macros", optional = true }
+
+[features]
+binary = ["macros", "x86_64"]

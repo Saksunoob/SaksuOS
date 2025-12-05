@@ -51,7 +51,7 @@ impl ConsoleOut {
     }
 
     pub fn printdec<T>(&self, num: T) where T: Into<u128> {
-        let mut num: u128 = num.into();
+        let num: u128 = num.into();
         if num == 0 {
             let mut buffer = [0x30, 0x0];
             self.print(buffer.as_mut_ptr());

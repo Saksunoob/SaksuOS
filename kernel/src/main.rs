@@ -3,18 +3,20 @@
 
 #[cfg(not(test))]
 use core::panic::PanicInfo;
+use bootloader::boot_info::{BootInfo, PixelFormat, RGBColor, Color};
 
 #[unsafe(no_mangle)]
-fn _start() -> u64 {
-    32
-}
+extern "C" fn _start(boot_info: *mut BootInfo) -> u64 {
+    let boot_info = unsafe { boot_info.as_mut().unwrap() };
+    let color = RGBColor::new(255, 0, 0);
 
-#[unsafe(no_mangle)]
-pub static TEST_VALUE: u64 = 0x12345678;
-
-#[unsafe(no_mangle)]
-pub extern "C" fn test_function() -> u64 {
-    TEST_VALUE
+    let color = match boot_info.framebuffer.pixel_format {
+        PixelFormat::RGB => color.get_rgba(),
+        PixelFormat::BGR => color.get_bgra(),
+        _ => color.get_rgba(),
+    };
+    boot_info.framebuffer.buffer.fill(color);
+    0
 }
 
 #[cfg(not(test))]

@@ -93,6 +93,126 @@ pub struct ProgramHeader {
     pub align: u64,
 }
 
+#[repr(u32)]
+pub enum SectionType {
+    Null = 0,
+    Progbits = 1,
+    Symtab = 2,
+    Strtab = 3,
+    Rela = 4,
+    Hash = 5,
+    Dynamic = 6,
+    Note = 7,
+    Nobits = 8,
+    Rel = 9,
+    Shlib = 10,
+    Dynsym = 11,
+    InitArray = 14,
+    FiniArray = 15,
+    PreinitArray = 16,
+    Group = 17,
+    SymtabShndx = 18,
+}
+
+#[repr(C, packed)]
+pub struct SectionHeader {
+    pub name: u32,
+    pub section_type: SectionType,
+    pub flags: u64,
+    pub vaddr: u64,
+    pub offset: u64,
+    pub size: u64,
+    pub link_index: u32,
+    pub info: u32,
+    pub addr_align: u64,
+    pub entry_size: u64,
+}
+
+#[repr(C)]
+pub struct RELEntry {
+    pub offset: u64,
+    pub relocation_type: RelocationType,
+    pub symbol_index: u32,
+}
+
+#[repr(C)]
+pub struct RELAEntry {
+    pub offset: u64,
+    pub relocation_type: RelocationType,
+    pub symbol_index: u32,
+    pub addend: u64
+}
+
+#[derive(Copy, Clone)]
+#[repr(u32)]
+pub enum RelocationType {
+    NONE = 0,
+    B64 = 1,
+    PC32 = 2,
+    GOT32 = 3,
+    PLT32 = 4,
+    COPY = 5,
+    GlobDat = 6,
+    JumpSlot = 7,
+    RELATIVE = 8,
+    GOTPCREL = 9,
+    B32 = 10,
+    B32S = 11,
+    B16 = 12,
+    PC16 = 13,
+    B8 = 14,
+    PC8 = 15,
+    PC64 = 24,
+    GOTOFF64 = 25,
+    GOTPC32 = 26,
+    SIZE32 = 32,
+    SIZE64 = 33,
+}
+
+#[repr(u64)]
+#[derive(Eq, PartialEq)]
+pub enum DynamicEntryType {
+    Null = 0,
+    Needed = 1,
+    PLTRelSize = 2,
+    PLTGOT = 3,
+    Hash = 4,
+    StringTable = 5,
+    SymbolTable = 6,
+    Rela = 7,
+    RelaSize = 8,
+    RelaEntry = 9,
+    StringSize = 10,
+    SymbolEntry = 11,
+    Init = 12,
+    Fini = 13,
+    SONAME = 14,
+    RPATH = 15,
+    Symbolic = 16,
+    Rel = 17,
+    RelSize = 18,
+    RelEntry = 19,
+    PLTRel = 20,
+    Debug = 21,
+    TextRel = 22,
+    JumpRel = 23,
+    BindNow = 24,
+    InitArray = 25,
+    FiniArray = 26,
+    InitArraySize = 27,
+    FiniArraySize = 28,
+    RunPath = 29,
+    Flags = 30,
+    Encoding = 31,
+    PreInitArray = 32,
+    PreInitArraySize = 33,
+}
+
+pub struct DynamicSectionEntry{
+    pub d_tag: DynamicEntryType,
+    pub d_val: u64,
+}
+
 impl<'a> Elf64<'a> {
     pub fn new(binary: *const u8) -> Result<Self, ElfParseError> {
         let ident = unsafe {(binary as *const Ident).as_ref().unwrap()};
@@ -154,6 +274,15 @@ impl<'a> Elf64<'a> {
         }
     }
 
+    pub fn section_headers(&self) -> &'static [SectionHeader] {
+        let ptr = unsafe {self.binary.byte_add(self.sh_offset as usize)} as *const SectionHeader;
+        let size = self.sh_entry_count as usize;
+        match unsafe { slice_from_raw_parts(ptr, size).as_ref() } {
+            Some(slice) => slice,
+            None => panic!("section header pointer out of range")
+        }
+    }
+
     unsafe fn read_value<T: Sized>(binary: *const u8, offset: usize, flip_bytes: bool) -> T where [u8; size_of::<T>()]: Sized {
         let buffer_ptr = unsafe {binary.byte_add(offset)} as *const [u8; size_of::<T>()];
         if flip_bytes {
@@ -161,9 +290,9 @@ impl<'a> Elf64<'a> {
             for i in 0..size_of::<T>() {
                 buffer[i] = unsafe{*(buffer_ptr as *const u8).byte_add(size_of::<T>()-i-1)};
             }
-            return unsafe {core::mem::transmute_copy(&buffer)}
+            unsafe {core::mem::transmute_copy(&buffer)}
         } else {
-            return unsafe {core::mem::transmute_copy(buffer_ptr.as_ref().unwrap())}
+            unsafe {core::mem::transmute_copy(buffer_ptr.as_ref().unwrap())}
         }
     }
 }
