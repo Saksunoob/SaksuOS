@@ -1,30 +1,30 @@
-
+#[derive(PartialEq, Eq)]
 #[repr(u32)]
 pub enum MemoryType {
-    ReservedMemoryType,
-    LoaderCode,
-    LoaderData,
-    BootServicesCode,
-    BootServicesData,
-    RuntimeServicesCode,
-    RuntimeServicesData,
-    ConventionalMemory,
-    UnusableMemory,
-    ACPIReclaimMemory,
-    ACPIMemoryNVS,
-    MemoryMappedIO,
-    MemoryMappedIOPortSpace,
-    PalCode,
-    PersistentMemory,
-    UnacceptedMemoryType,
-    MaxMemoryType
+    ReservedMemoryType = 0,
+    LoaderCode = 1,
+    LoaderData = 2,
+    BootServicesCode = 3,
+    BootServicesData = 4,
+    RuntimeServicesCode = 5,
+    RuntimeServicesData = 6,
+    ConventionalMemory = 7,
+    UnusableMemory = 8,
+    ACPIReclaimMemory = 9,
+    ACPIMemoryNVS = 10,
+    MemoryMappedIO = 11,
+    MemoryMappedIOPortSpace = 12,
+    PalCode = 13,
+    PersistentMemory = 14,
+    UnacceptedMemoryType = 15,
+    MaxMemoryType = 16
 }
 
 #[repr(C)]
 pub struct EfiMemoryDescriptor {
-    m_type: u32,
-    p_addr: u64,
-    v_addr: u64,
-    num_pages: u64,
-    attribute: u64
+    pub m_type: MemoryType,
+    pub p_addr: usize,
+    pub v_addr: usize,
+    pub num_pages: usize,
+    pub attribute: u64
 }

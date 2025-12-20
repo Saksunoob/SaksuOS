@@ -1,4 +1,4 @@
 #![no_std]
 
 pub mod boot_info;
-mod memory;
+pub mod memory;

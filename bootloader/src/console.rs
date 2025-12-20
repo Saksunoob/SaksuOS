@@ -21,8 +21,13 @@ impl ConsoleOut {
 
     pub fn printstr(&self, str: &str) {
         for char in str.encode_utf16() {
-            let mut buffer = [char, 0];
-            self.print(buffer.as_mut_ptr());
+            if char == '\n' as u16 {
+                let mut buffer = [char, '\r' as u16, 0];
+                self.print(buffer.as_mut_ptr());
+            } else {
+                let mut buffer = [char, 0];
+                self.print(buffer.as_mut_ptr());
+            }
         }
     }
 

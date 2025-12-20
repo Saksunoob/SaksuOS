@@ -37,11 +37,14 @@ pub extern "efiapi" fn efi_main(image: Handle, st: *mut SystemTable) -> usize {
     }
     let bs = unsafe {(*st).boot_services};
 
+    // Load kernel file
     let filename = uefistr!("KERNEL");
     let kernel_handle = get_root_file_handle(image, bs, filename);
     let file_info = get_file_info::<6>(kernel_handle);
 
     let kernel_binary = read_file(bs, kernel_handle, file_info);
+
+    // Read kernel load data
     let kernel = Elf64::new(kernel_binary).unwrap();
 
     let mut min_page = usize::MAX;
@@ -60,29 +63,19 @@ pub extern "efiapi" fn efi_main(image: Handle, st: *mut SystemTable) -> usize {
         }
     }
 
+    // Load kernel
     let kernel_page_count = max_page+1;
     let kernel_pages = allocate_pages(bs, kernel_page_count);
 
     let base = 0xffff800000000000;
 
+    // Relocate
     let relocate = |offset: u64, r_type: RelocationType, addend: u64| {
-        stdout().printhex(offset);
-        stdout().printstr(": ");
-        stdout().printhex(addend);
-        stdout().printstr("=>");
-        stdout().printhex(base + addend);
         let addr = unsafe { kernel_pages.byte_add(offset as usize) };
 
         unsafe { match r_type {
-            //RelocationType::B64 => (addr as *mut u64).write((addr as *mut u64).read() + addend),
             RelocationType::RELATIVE => {
-                stdout().printstr(" | ");
-                stdout().printhex(addr as u64);
-                stdout().printstr(": ");
-                stdout().printhex((addr as *mut u64).read());
                 (addr as *mut u64).write(base + addend);
-                stdout().printstr(" => ");
-                stdout().printhex((addr as *mut u64).read());
             },
             _ => {
                 stdout().printdec::<u32>(core::mem::transmute(r_type));
@@ -92,6 +85,7 @@ pub extern "efiapi" fn efi_main(image: Handle, st: *mut SystemTable) -> usize {
         stdout().printstr("\r\n");
     };
 
+    // Write kernel code to memory
     for segment in kernel.program_headers() {
         match segment.segment_type {
             SegmentType::Load => {
@@ -150,20 +144,14 @@ pub extern "efiapi" fn efi_main(image: Handle, st: *mut SystemTable) -> usize {
         }
     }
 
-    stdout().printstr("\n\r");
-
+    // Map higher half addresses to kernel memory
     init_paging(bs);
-    stdout().printhex(kernel_page_count as u64);
-    stdout().printstr("\n\r");
     for i in 0..kernel_page_count {
         map_page(bs, (kernel_pages as usize + i*PAGE_SIZE) as PhysicalAddress,
                  (0xffff800000000000+i*PAGE_SIZE) as VirtualAddress);
-        stdout().printhex((0xffff800000000000+i*PAGE_SIZE) as u64);
-        stdout().printstr("=>");
-        stdout().printhex((kernel_pages as usize + i*PAGE_SIZE) as u64);
-        stdout().printstr("\n\r");
     }
 
+    // Allocate kernel stack
     let kernel_stack_pages = 4;
     let kernel_stack = allocate_pages(bs, kernel_stack_pages);
     for i in 0..kernel_stack_pages {
@@ -171,6 +159,7 @@ pub extern "efiapi" fn efi_main(image: Handle, st: *mut SystemTable) -> usize {
                  (0xffff800000000000+(kernel_page_count+i)*PAGE_SIZE) as VirtualAddress)
     }
 
+    // Get a framebuffer
     let framebuffer = unsafe {
         let mut handles_ptr: *mut Handle = null_mut();
         let mut handle_count = 0;
@@ -236,16 +225,21 @@ pub extern "efiapi" fn efi_main(image: Handle, st: *mut SystemTable) -> usize {
         }
     };
 
+    // Enable higher half addresses
     switch_l4();
 
     let entry_addr: u64 = 0xffff800000000000 + kernel.entry;
     let stack_addr: usize = 0xffff800000000000 + (kernel_page_count+kernel_stack_pages-1)*PAGE_SIZE;
 
-    //stdout().printhex(core::ptr::from_ref(boot_info.framebuffer.buffer).addr() as u64);
-
     //boot_info.framebuffer.clear(RGBColor::new(255, 255, 255));
 
+
+    // Get memory map
     let (memory_map, map_key) = get_memory_map(bs);
+
+    //memory_test::init(memory_map);
+
+    // Exit boot services
     let status = unsafe { ((*bs).exit_boot_services)(image, map_key) };
     if status != Status::SUCCESS {
         panic!("Failed to exit boot services");
@@ -272,7 +266,7 @@ pub extern "efiapi" fn efi_main(image: Handle, st: *mut SystemTable) -> usize {
     loop {}
 }
 
-fn stdout() -> &'static ConsoleOut {
+pub fn stdout() -> &'static ConsoleOut {
     unsafe { match STDOUT.as_ref() {
         Some(stdout) => stdout,
         None => panic!("Failed to get stdout"),
@@ -298,7 +292,7 @@ fn get_memory_map(bs: *mut BootServices) -> (&'static [EfiMemoryDescriptor], usi
 
         let _ = ((*bs).get_memory_map)(&mut size, map_ptr, &mut key, &mut desc_size, &mut desc_version);
 
-        (slice::from_raw_parts(map_ptr as *mut EfiMemoryDescriptor, size).as_ref(), key)
+        (slice::from_raw_parts(map_ptr as *mut EfiMemoryDescriptor, size/size_of::<EfiMemoryDescriptor>()).as_ref(), key)
     }
 }
 
@@ -312,7 +306,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
             None => ()
         }
         if let Some(pos) = info.location() {
-            stdout.printstr("\n\rat ");
+            stdout.printstr("\nat ");
             stdout.printstr(pos.file());
             stdout.printstr(":");
             stdout.printdec(pos.line());
