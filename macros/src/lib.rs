@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use std::fs;
 use quote::quote;
-use syn::{LitStr};
+use syn::{Ident, LitStr};
 
 #[proc_macro]
 pub fn uefistr(input: TokenStream) -> TokenStream {
@@ -121,4 +121,21 @@ pub fn bdf_font(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+#[proc_macro]
+pub fn generic_handlers(input: TokenStream) -> TokenStream {
+    let ident = syn::parse_macro_input!(input as Ident);
+
+    let cases: Vec<_> = (0..=255u8).map(|i| {
+        quote! {
+            #i => default_handler::<#i> as u64
+        }
+    }).collect();
+
+    TokenStream::from(quote! {
+        match #ident {
+            #(#cases),*
+        }
+    })
 }
