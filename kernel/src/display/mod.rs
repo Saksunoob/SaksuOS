@@ -59,7 +59,7 @@ pub fn draw_char(ch: char, x: usize, y: usize, color: RGBColor) {
         Some(ch) => {
             let ch_bounds = ch.bounds();
             let x_offset = (x+ch_bounds.x()) as usize;
-            let y_offset = (y+8-ch.bounds().height()-ch_bounds.y()) as usize;
+            let y_offset = (y+ch_bounds.y()) as usize;
 
             for (l, line) in ch.bitmap().iter().enumerate() {
                 for p in 0..ch.bounds().width() {

@@ -1,0 +1,1 @@
+otf2bdf Mx437_IBM_BIOS.ttf -p 8 -r 72 -o ib8x8u.bdf
