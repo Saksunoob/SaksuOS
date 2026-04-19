@@ -9,6 +9,7 @@ mod memory;
 mod interrupts;
 mod gdt;
 mod sync;
+mod keyboard;
 
 use core::arch::asm;
 #[cfg(not(test))]
@@ -29,10 +30,10 @@ extern "C" fn _start(boot_info: *mut BootInfo) -> u64 {
     println!("set handler");
     interrupts::set_interrupt_handler(0, divide_by_zero);
     unsafe {
-        asm!("int 0")
+        keyboard::init();
+        asm!("sti")
     };
-    println!("everything is working");
-    loop {}
+    panic!("Successful initialization!");
 }
 
 extern "x86-interrupt" fn divide_by_zero(_: InterruptStackFrame) {
@@ -49,5 +50,7 @@ fn panic(info: &PanicInfo) -> ! {
     if let Some(pos) = info.location() {
         println!("at {}:{}:{}", pos.file(), pos.line(), pos.column());
     }
-    loop {}
+    loop { unsafe {
+        asm!("hlt")
+    } }
 }
