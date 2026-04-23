@@ -161,6 +161,7 @@ impl Terminal {
         for c in string.chars() {
             self.print_char(c);
         }
+        flush();
     }
 }
 

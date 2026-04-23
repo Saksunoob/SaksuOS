@@ -1,6 +1,7 @@
 use core::arch::asm;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicU8, Ordering};
 use crate::interrupts::{set_interrupt_handler, InterruptStackFrame};
+use crate::sync::{CircularBuffer, OnceInit};
 
 #[inline(always)]
 unsafe fn outb(port: u16, val: u8) { unsafe {
@@ -28,7 +29,8 @@ unsafe fn inb(port: u16) -> u8 { unsafe {
 pub unsafe fn init() {
     unsafe {
         pic_remap();
-        set_interrupt_handler(33, keyboard_handler)
+        set_interrupt_handler(33, keyboard_handler);
+        EVENT_BUFFER.init(CircularBuffer::allocate(1));
     }
 }
 
@@ -66,35 +68,32 @@ const SCANCODE_MAP: [char; 0x3A] = [
     '\0', '\0', '\0', ' '
 ];
 
-static EXTENDED: AtomicBool = AtomicBool::new(false);
+static EXTENDED: AtomicU8 = AtomicU8::new(0);
+
+static EVENT_BUFFER: OnceInit<CircularBuffer<u16>> = unsafe { OnceInit::new() };
+
+pub fn poll_event() -> Option<u16> {
+    let mut event_buffer = EVENT_BUFFER.get().reader();
+    if event_buffer.size() == 0 {
+        return None;
+    }
+    Some(event_buffer.pop_front())
+}
 
 extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
     unsafe {
         // Read the scancode from the PS/2 data port
         let scancode = inb(0x60);
-        let extended = EXTENDED.swap(false, Ordering::Relaxed);
+        let extended = EXTENDED.swap(0, Ordering::Relaxed);
 
-        // Filter out "break" codes (key releases) and out-of-bounds
-        if !extended && scancode < 0x3A {
-            let key = SCANCODE_MAP[scancode as usize];
-            if key != '\0' {
-                println!("DOWN {} ({:x})", key, scancode);
-            }
-        }
-        else if !extended && scancode >= 0x80 && scancode < 0x80+0x3A {
-            let key = SCANCODE_MAP[scancode as usize - 0x80];
-            if key != '\0' {
-                println!("UP   {} ({:x})", key, scancode);
-            }
-        } else if scancode == 0xE0 {
-            EXTENDED.store(true, Ordering::Relaxed);
-        } else if extended {
-            println!("UNKNOWN EXTENDED: {:x}", scancode);
-        } else {
-            println!("UNKNOWN: {:x}", scancode);
+        if scancode == 0xE0 {
+            EXTENDED.store(scancode, Ordering::Relaxed);
+            outb(0x20, 0x20);
+            return;
         }
 
-        // Send EOI to the PIC
+        let mut event_buffer = EVENT_BUFFER.get().writer();
+        event_buffer.push_back((extended as u16) << 8 | scancode as u16);
         outb(0x20, 0x20);
     }
 }
