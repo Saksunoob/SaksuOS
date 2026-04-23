@@ -2,10 +2,12 @@ use core::fmt::{Arguments, Write};
 use core::ptr::null_mut;
 use bootloader::boot_info::{FrameBuffer, PixelFormat, RGBColor, Color};
 use crate::display::font::{get_char, get_font_bounds};
+use crate::memory::{allocate_pages, PAGE_SIZE};
 
 mod font;
 
 static mut FRAMEBUFFER: *mut FrameBuffer = null_mut();
+static mut BACKBUFFER: *mut u8 = null_mut();
 static mut TERMINAL: Terminal = Terminal::new();
 static mut COUNT: usize = 0;
 const DEBUG_DOT_SIZE: usize = 4;
@@ -14,9 +16,18 @@ fn framebuffer() -> &'static mut FrameBuffer {
     unsafe { FRAMEBUFFER.as_mut().unwrap() }
 }
 
+fn backbuffer() -> &'static mut [[u8; 4]] {
+    let framebuffer = framebuffer();
+    let size = framebuffer.width * framebuffer.height;
+    unsafe { core::slice::from_raw_parts_mut(BACKBUFFER as *mut [u8; 4], size) }
+}
+
 pub fn init(frame_buffer: &mut FrameBuffer) {
     unsafe {
         FRAMEBUFFER = frame_buffer;
+        let size = frame_buffer.stride * frame_buffer.height * 4;
+        let pages = size.div_ceil(PAGE_SIZE);
+        BACKBUFFER = allocate_pages(pages);
     }
 }
 
@@ -31,15 +42,34 @@ pub fn debug_dot(color: RGBColor) {
     };
 
     rect(color, x, y, DEBUG_DOT_SIZE, DEBUG_DOT_SIZE);
-
+    flush_rows(y, DEBUG_DOT_SIZE);
     unsafe { COUNT += 1 }
 }
 
 fn rect(color: [u8; 4], x: usize, y: usize, width: usize, height: usize) {
     for y in y..y+height {
         for x in x..x+width {
-            framebuffer().buffer[y*framebuffer().stride+x] = color
+            backbuffer()[y*framebuffer().stride+x] = color
         }
+    }
+}
+
+pub fn flush() {
+    let framebuffer = framebuffer();
+    let backbuffer = backbuffer();
+    let pixels = framebuffer.stride * framebuffer.height;
+    unsafe { core::ptr::copy_nonoverlapping(backbuffer.as_ptr(), framebuffer.buffer.as_mut_ptr(), pixels) }
+}
+
+pub fn flush_rows(start: usize, count: usize) {
+    let framebuffer = framebuffer();
+    let backbuffer = backbuffer();
+    let offset = start * framebuffer.stride;
+    let pixels = framebuffer.stride * count;
+    unsafe {
+        let src = backbuffer.as_ptr().byte_add(offset);
+        let dst = framebuffer.buffer.as_mut_ptr().byte_add(offset);
+        core::ptr::copy_nonoverlapping(src, dst, pixels);
     }
 }
 
@@ -80,7 +110,8 @@ pub fn clear(color: RGBColor) {
         PixelFormat::BGR => color.get_bgra(),
         _ => color.get_rgba(),
     };
-    framebuffer().buffer.fill(color);
+    backbuffer().fill(color);
+    flush();
 }
 
 struct Terminal {
@@ -96,10 +127,23 @@ impl Terminal {
 
     fn print_char(&mut self, ch: char) {
         match ch {
+            '\x08' => {
+                if self.cursor.0 > 0 {
+                    self.cursor.0 -= 1;
+                }
+            }
+            '\t' => {
+                self.cursor.0 = (self.cursor.0+3)/3*3;
+                if self.cursor.0 >= Self::max_cursor_x() {
+                    self.cursor.1 += 1;
+                    self.cursor.0 = 0;
+                }
+            }
             '\n' => {
                 self.cursor.1 += 1;
                 self.cursor.0 = 0;
             },
+            '\x0C' => self.cursor.1 = 0,
             '\r' => self.cursor.0 = 0,
             ch => {
                 draw_char(ch, self.cursor.0, self.cursor.1, RGBColor::new(255, 255, 255));

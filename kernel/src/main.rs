@@ -4,12 +4,13 @@
 #![no_main]
 
 #[macro_use]
-mod display;
-mod memory;
+pub mod display;
+pub mod memory;
 mod interrupts;
 mod gdt;
 mod sync;
-mod keyboard;
+pub mod keyboard;
+mod console;
 
 use core::arch::asm;
 #[cfg(not(test))]
@@ -20,9 +21,9 @@ use crate::interrupts::InterruptStackFrame;
 #[unsafe(no_mangle)]
 extern "C" fn _start(boot_info: *mut BootInfo) -> u64 {
     let boot_info = unsafe { boot_info.as_mut().unwrap() };
+    memory::init(boot_info.memory_map);
     display::init(&mut boot_info.framebuffer);
     println!("Hello, World!");
-    memory::init(boot_info.memory_map);
     println!("Initializing gdt");
     gdt::flush();
     println!("Initializing idt");
@@ -33,7 +34,8 @@ extern "C" fn _start(boot_info: *mut BootInfo) -> u64 {
         keyboard::init();
         asm!("sti")
     };
-    panic!("Successful initialization!");
+    println!("Welcome to SaksuOS!");
+    console::_start();
 }
 
 extern "x86-interrupt" fn divide_by_zero(_: InterruptStackFrame) {

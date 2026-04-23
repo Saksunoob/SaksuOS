@@ -55,3 +55,19 @@ pub fn allocate_page() -> *mut u8 {
     }
     ptr
 }
+
+pub fn allocate_pages(count: usize) -> *mut u8 {
+    for i in 0..unsafe{FREE_PAGE_REGIONS_COUNT} {
+        let last_region = unsafe { FREE_PAGES_START.add(FREE_PAGE_REGIONS_COUNT-1-i).as_mut().unwrap() };
+        if last_region.end - last_region.start >= count*PAGE_SIZE {
+            last_region.end -= count*PAGE_SIZE;
+            let ptr = last_region.end as *mut u8;
+            if last_region.end == last_region.start {
+                unsafe { FREE_PAGE_REGIONS_COUNT -= 1 }
+            }
+            return ptr
+        }
+
+    }
+    panic!("Unable to allocate {} pages", count);
+}
