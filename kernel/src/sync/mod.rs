@@ -138,8 +138,8 @@ impl<'a, T> CircularWriteLock<'a, T> {
         if (end+1)%self.buffer.buffer_size == start {
             panic!("CircularWriteLock: buffer overflow");
         }
-        self.buffer.end.store((end+1)%self.buffer.buffer_size, Ordering::Release);
         unsafe { self.buffer.buffer.add(self.buffer.end()).write(value); }
+        self.buffer.end.store((end+1)%self.buffer.buffer_size, Ordering::Release);
     }
     pub fn size(&self) -> usize {
         self.buffer.size()
