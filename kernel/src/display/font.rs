@@ -1,7 +1,7 @@
 use macros::bdf_font;
 const FONT: Font = bdf_font!("src/display/bdf/ib8x8u.bdf");
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct BoundingBox(i64, i64, i64, i64);
 
 impl BoundingBox {

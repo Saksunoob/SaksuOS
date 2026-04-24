@@ -73,29 +73,36 @@ pub fn flush_rows(start: usize, count: usize) {
     }
 }
 
-pub fn draw_char(ch: char, x: usize, y: usize, color: RGBColor) {
-    let color = match framebuffer().pixel_format {
-        PixelFormat::RGB => color.get_rgba(),
-        PixelFormat::BGR => color.get_bgra(),
-        _ => color.get_rgba(),
+pub fn draw_char(ch: char, x: usize, y: usize, foreground_color: RGBColor, background_color: RGBColor) {
+    let fg = match framebuffer().pixel_format {
+        PixelFormat::RGB => foreground_color.get_rgba(),
+        PixelFormat::BGR => foreground_color.get_bgra(),
+        _ => foreground_color.get_rgba(),
+    };
+    let bg = match framebuffer().pixel_format {
+        PixelFormat::RGB => background_color.get_rgba(),
+        PixelFormat::BGR => background_color.get_bgra(),
+        _ => background_color.get_rgba(),
     };
 
     let bounds = get_font_bounds();
-    let x = x as i64*bounds.width()+bounds.x();
-    let y = y as i64*bounds.height()-bounds.y();
+    let x = x as i64*bounds.width();
+    let y = y as i64*bounds.height();
+
+    rect(bg, x as usize, y as usize, bounds.width() as usize, bounds.height() as usize);
 
     let ch = get_char(ch);
     match ch {
         Some(ch) => {
             let ch_bounds = ch.bounds();
-            let x_offset = (x+ch_bounds.x()) as usize;
-            let y_offset = (y+ch_bounds.y()) as usize;
+            let x_offset = (x+ch_bounds.x()-bounds.x()) as usize;
+            let y_offset = (y+ch_bounds.y()-bounds.y()) as usize;
 
             for (l, line) in ch.bitmap().iter().enumerate() {
                 for p in 0..ch.bounds().width() {
                     let v = (line >> (7-p)) & 1 > 0;
                     if v {
-                        rect(color, x_offset + p as usize, y_offset+l, 1, 1)
+                        rect(fg, x_offset + p as usize, y_offset+l, 1, 1)
                     }
                 }
             }
@@ -130,6 +137,9 @@ impl Terminal {
             '\x08' => {
                 if self.cursor.0 > 0 {
                     self.cursor.0 -= 1;
+                    draw_char('\0', self.cursor.0, self.cursor.1,
+                              RGBColor::new(255, 255, 255),
+                              RGBColor::new(0, 0, 0));
                 }
             }
             '\t' => {
@@ -146,7 +156,10 @@ impl Terminal {
             '\x0C' => self.cursor.1 = 0,
             '\r' => self.cursor.0 = 0,
             ch => {
-                draw_char(ch, self.cursor.0, self.cursor.1, RGBColor::new(255, 255, 255));
+                draw_char(ch, self.cursor.0, self.cursor.1,
+                          RGBColor::new(255, 255, 255),
+                          RGBColor::new(0, 0, 0)
+                );
                 self.cursor.0 += 1;
 
                 if self.cursor.0 >= Terminal::max_cursor_x() {
