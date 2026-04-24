@@ -47,7 +47,7 @@ extern "x86-interrupt" fn divide_by_zero(_: InterruptStackFrame) {
 fn panic(info: &PanicInfo) -> ! {
     match info.message().as_str() {
         Some(msg) => println!("Panic: {}", msg),
-        None => ()
+        None => println!("Panic with no message"),
     }
     if let Some(pos) = info.location() {
         println!("at {}:{}:{}", pos.file(), pos.line(), pos.column());
